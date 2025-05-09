@@ -1,7 +1,7 @@
 import "@/app/globals.css";
 import Link from "next/link";
 import { ReactNode } from "react";
-import { AuthButton } from "@/components/ui/auth-button";
+// import { AuthButton } from "@/components/header-auth;
 
 export const metadata = {
   title: "Personal Finance Suite",
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 Dashboard
               </Link>
               {/* Add other nav items here */}
-              <AuthButton />
+              {/* <AuthButton /> */}
             </nav>
           </div>
         </header>

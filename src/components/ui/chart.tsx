@@ -304,43 +304,192 @@ function ChartLegendContent({
   )
 }
 
-// Helper to extract item config from a payload.
+// Add these imports at the top with the other imports
+import {
+  Bar,
+  Line,
+  BarChart,
+  LineChart,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Area,
+  AreaChart,
+  Tooltip
+} from "recharts"
+
+// Update the ChartProps type to accept both data formats
+type ChartProps = {
+  type: 'bar' | 'line' | 'area'
+  data: Array<Record<string, any>> | {
+    labels: string[]
+    datasets: Array<{
+      label: string
+      data: number[]
+      [key: string]: any
+    }>
+  }
+  title?: string
+  className?: string
+  color?: string
+  xAxisKey?: string
+  yAxisKey?: string
+}
+
+// Add this helper function to transform Chart.js format data to Recharts format
+function transformChartData(
+  data: ChartProps['data'],
+  xAxisKey: string,
+  yAxisKey: string
+): Array<Record<string, any>> {
+  if (Array.isArray(data)) {
+    return data; // Already in the right format
+  }
+  
+  // Transform from Chart.js format to Recharts format
+  return data.labels.map((label, index) => {
+    const result: Record<string, any> = {
+      [xAxisKey]: label
+    };
+    
+    // Add each dataset's value for this index
+    data.datasets.forEach((dataset, datasetIndex) => {
+      const key = dataset.label || `dataset_${datasetIndex}`;
+      result[key] = dataset.data[index];
+    });
+    
+    return result;
+  });
+}
+
+function Chart({
+  type,
+  data,
+  title,
+  className,
+  color = 'primary',
+  xAxisKey = 'name',
+  yAxisKey = 'value'
+}: ChartProps) {
+  // Define chart config for colors
+  const chartConfig = {
+    [yAxisKey]: {
+      label: title,
+      color: getColorByName(color)
+    }
+  }
+  
+  // Transform data if needed
+  const transformedData = transformChartData(data, xAxisKey, yAxisKey);
+  
+  // Render the appropriate chart based on type
+  const renderChart = () => {
+    switch (type) {
+      case 'bar':
+        return (
+          <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+            <BarChart data={transformedData}>
+              <XAxis dataKey={xAxisKey} tickLine={false} axisLine={false} />
+              <YAxis hide />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.2} />
+              <Bar dataKey={yAxisKey} fill={`var(--color-${yAxisKey})`} radius={[4, 4, 0, 0]} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+            </BarChart>
+          </RechartsPrimitive.ResponsiveContainer>
+        );
+      
+      case 'line':
+        return (
+          <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+            <LineChart data={transformedData}>
+              <XAxis dataKey={xAxisKey} tickLine={false} axisLine={false} />
+              <YAxis hide />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.2} />
+              <Line
+                type="monotone"
+                dataKey={yAxisKey}
+                stroke={`var(--color-${yAxisKey})`}
+                strokeWidth={2}
+                dot={{ fill: `var(--color-${yAxisKey})`, r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <ChartTooltip content={<ChartTooltipContent />} />
+            </LineChart>
+          </RechartsPrimitive.ResponsiveContainer>
+        );
+        
+      case 'area':
+        return (
+          <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={transformedData}>
+              <XAxis dataKey={xAxisKey} tickLine={false} axisLine={false} />
+              <YAxis hide />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.2} />
+              <Area 
+                type="monotone" 
+                dataKey={yAxisKey} 
+                stroke={`var(--color-${yAxisKey})`}
+                fill={`var(--color-${yAxisKey})`}
+                fillOpacity={0.2}
+              />
+              <ChartTooltip content={<ChartTooltipContent />} />
+            </AreaChart>
+          </RechartsPrimitive.ResponsiveContainer>
+        );
+        
+      default:
+        // Provide a fallback element instead of null
+        return (
+          <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              No chart type specified
+            </div>
+          </RechartsPrimitive.ResponsiveContainer>
+        );
+    }
+  };
+
+  return (
+    <ChartContainer config={chartConfig} className={className}>
+      {renderChart()}
+    </ChartContainer>
+  );
+}
+
+// Helper function to get color values based on common color names
+function getColorByName(colorName: string): string {
+  const colors: Record<string, string> = {
+    primary: '#0ea5e9',
+    secondary: '#8b5cf6',
+    indigo: '#6366f1',
+    emerald: '#10b981',
+    green: '#22c55e',
+    red: '#ef4444',
+    blue: '#3b82f6',
+    teal: '#14b8a6',
+    gray: '#6b7280',
+    amber: '#f59e0b'
+  }
+  
+  return colors[colorName] || colors.primary
+}
+
+/**
+ * Helper function to get the configuration for a payload item from the chart config
+ */
 function getPayloadConfigFromPayload(
   config: ChartConfig,
-  payload: unknown,
+  item: any,
   key: string
 ) {
-  if (typeof payload !== "object" || payload === null) {
-    return undefined
-  }
+  // Try to find config by dataKey first
+  const itemConfig = config[key] || 
+    // Then by name
+    config[item?.name as keyof typeof config] ||
+    // Then by dataKey if different from key
+    (item?.dataKey && item.dataKey !== key ? config[item.dataKey as keyof typeof config] : undefined)
 
-  const payloadPayload =
-    "payload" in payload &&
-    typeof payload.payload === "object" &&
-    payload.payload !== null
-      ? payload.payload
-      : undefined
-
-  let configLabelKey: string = key
-
-  if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === "string"
-  ) {
-    configLabelKey = payload[key as keyof typeof payload] as string
-  } else if (
-    payloadPayload &&
-    key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
-  ) {
-    configLabelKey = payloadPayload[
-      key as keyof typeof payloadPayload
-    ] as string
-  }
-
-  return configLabelKey in config
-    ? config[configLabelKey]
-    : config[key as keyof typeof config]
+  return itemConfig
 }
 
 export {
@@ -350,4 +499,5 @@ export {
   ChartLegend,
   ChartLegendContent,
   ChartStyle,
+  Chart
 }
